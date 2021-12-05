@@ -1,0 +1,439 @@
+---
+title: "DS6306_Case_Study_2"
+author: "Triston Hudgins"
+date: "11/26/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(ggthemes)
+library(png)
+library(ggimage)
+library(naniar)
+library(plotly)
+library(class)
+library(caret)
+library(e1071)
+
+```
+
+
+#Pull Data
+
+```{r}
+
+#Import Datasets
+CaseStudy2 <- read_csv("https://raw.githubusercontent.com/BivinSadler/MSDS_6306_Doing-Data-Science/Master/Unit%2014%20and%2015%20Case%20Study%202/CaseStudy2-data.csv")
+
+AttritionTest <- read_csv("https://raw.githubusercontent.com/BivinSadler/MSDS_6306_Doing-Data-Science/Master/Unit%2014%20and%2015%20Case%20Study%202/CaseStudy2CompSet%20No%20Attrition.csv")
+
+IncomeTest <- read_excel("CaseStudy2CompSet No Salary.xlsx")
+
+```
+
+<br>
+
+<br>
+
+#Missing Values Check and initial plotting group
+```{r}
+
+#check missing values
+gg_miss_var(CaseStudy2)
+
+#Initial plotting group
+CaseStudy2 %>%
+  select(Attrition, MonthlyIncome, JobInvolvement, DistanceFromHome, YearsInCurrentRole, WorkLifeBalance, OverTime) %>%
+  ggpairs(aes(color=Attrition))
+
+```
+
+<br>
+
+<br>
+
+#Attrtion by Department
+<br>
+##As each department generally has different challenges, we have elected to observe attrtion by departments and job roles
+
+```{r}
+
+#Analyze overall attrtion
+Attritiondf <- CaseStudy2 %>%
+                  filter(Attrition == "Yes")
+
+#Attrition Counts by Department
+Attritiondf %>%
+  ggplot(aes(x=Attrition, fill = Attrition)) +
+  geom_bar(alpha = 0.6) +
+  scale_fill_manual(values=c('#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "none",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Attrition Count by Department", y = "Count") +
+  facet_grid(~Department)
+#Sales and Research and Development have the highest attrition count 
+
+#Attrition Counts by Job Role
+Attritiondf %>%
+  ggplot(aes(x=Attrition, fill = Attrition)) +
+  geom_bar(alpha = 0.6) +
+  scale_fill_manual(values=c('#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "none",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Attrition Count by Job Role", y = "Count") +
+  facet_grid(~JobRole)
+
+#Counts and percentages of attrition by Department
+Department <- CaseStudy2 %>%
+                group_by(Department) %>%
+                count(Department, Attrition) %>%
+                mutate(Percent = (n / sum(n))*100) %>%
+                ungroup()
+
+kable(Department)
+
+#Percent Atrition by Department
+PercentAttritionDP <- CaseStudy2 %>%
+  group_by(Department) %>%
+  count(Department, Attrition) %>%
+  mutate(Percent = (n / sum(n))*100) %>%
+  ungroup()
+
+#Attrition by Department Percentage
+PercentAttritionDP %>%
+  filter(Attrition == "Yes") %>%
+  group_by(Department) %>%
+  ggplot(aes(x=Attrition, y=Percent, fill = Attrition)) +
+  geom_bar(stat = "identity", alpha = 0.6) +
+  scale_fill_manual(values=c('#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "none",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Attrition Percentage by Job Role", y = "Percent") +
+  facet_grid(~Department)
+
+#Percent Atrition by Job Role
+PercentAttritionJR <- CaseStudy2 %>%
+  group_by(JobRole) %>%
+  count(JobRole, Attrition) %>%
+  mutate(Percent = (n / sum(n))*100) %>%
+  ungroup()
+
+#Attrition by Job Role Percentage
+PercentAttritionJR %>%
+  filter(Attrition == "Yes") %>%
+  group_by(JobRole) %>%
+  ggplot(aes(x=Attrition, y=Percent, fill = Attrition)) +
+  geom_bar(stat = "identity", alpha = 0.6) +
+  scale_fill_manual(values=c('#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "none",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Attrition Percentage by Job Role", y = "Percent") +
+  facet_grid(~JobRole)
+
+#Job Role Percent Attrition
+JobRoleCount <- CaseStudy2 %>%
+                  group_by(JobRole) %>%
+                  count(JobRole, Attrition) %>%
+                  mutate(Percent = (n / sum(n))*100) %>%
+                  ungroup()
+
+kable(JobRoleCount)
+
+```
+
+<br>
+
+#Monthly Income By Job Role
+
+<br>
+
+```{r}
+
+#BoxPlot of Attrition and Monthly Income
+CaseStudy2 %>%
+  ggplot(aes(x=MonthlyIncome, fill = Attrition)) + 
+  geom_boxplot(alpha = 0.6) + 
+  coord_flip() +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"),
+        rect = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
+  labs(title = "Box Plot of Monthly Income by Job Role Attrition") +
+  facet_grid(~JobRole)
+#Largest disparity is in HR
+#HR, Lab Tech, and Sales Rep all have lower median monthly income among the attrition group
+
+
+#Filter HR, Lab Tech, and Sales Rep
+target <- c("Sales Representative", "Laboratory Technician", "Human Resources")
+
+CaseStudy2 %>%
+  filter(JobRole %in% target) %>%
+  ggplot(aes(x=MonthlyIncome, fill = Attrition)) + 
+  geom_boxplot(alpha = 0.6) + 
+  coord_flip() +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"),
+        rect = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
+  labs(title = "Box Plot of Monthly Income by Job Role Attrition") +
+  facet_grid(~JobRole)
+
+#Show Job Role and Attrition Stats
+CaseStudy2 %>%
+  filter(JobRole %in% target) %>%
+  group_by(JobRole, Attrition) %>%
+  summarise(Mean=mean(MonthlyIncome), Max=max(MonthlyIncome), Min=min(MonthlyIncome),
+            Median=median(MonthlyIncome), Std=sd(MonthlyIncome))
+
+#T Test for difference in mean monthly income in attrition group
+TTest <- CaseStudy2 %>%
+            filter(JobRole %in% target)
+
+t.test(CaseStudy2$MonthlyIncome~CaseStudy2$Attrition)
+
+t.test(TTest$MonthlyIncome~TTest$Attrition)
+
+
+
+```
+
+<br>
+
+#Overtime By Job Role
+
+<br>
+
+```{r}
+
+#Percent Attrition by Overtime and Job Role
+PercentAttrition <- CaseStudy2 %>%
+  group_by(JobRole) %>%
+  count(JobRole, OverTime, Attrition) %>%
+  mutate(Percent = (n / sum(n))*100) %>%
+  ungroup()
+
+#Box Plot of Monthly Income by Overtime Requirement
+CaseStudy2 %>%
+  group_by(OverTime) %>%
+  filter(JobRole %in% target) %>%
+  ggplot(aes(x=MonthlyIncome, y = OverTime, fill = Attrition)) + 
+  geom_boxplot(alpha = 0.6) + 
+  coord_flip() +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"),
+        rect = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
+  labs(title = "Box Plot of Monthly Income by Overtime Requirement") +
+  facet_grid(~JobRole)
+
+#Show Overtime and Attrition Stats
+CaseStudy2 %>%
+  filter(JobRole %in% target) %>%
+  filter(OverTime == "Yes") %>%
+  group_by(JobRole, OverTime, Attrition) %>%
+  summarise(Mean=mean(MonthlyIncome), Max=max(MonthlyIncome), Min=min(MonthlyIncome),
+            Median=median(MonthlyIncome), Std=sd(MonthlyIncome))
+
+```
+
+<br>
+
+#Job Involvement By Job Role
+
+<br>
+
+```{r}
+
+
+#Percent Attrition by Job Involvement and Job Role
+PercentAttrition <- CaseStudy2 %>%
+  group_by(JobRole) %>%
+  count(JobRole, JobInvolvement, Attrition) %>%
+  mutate(Percent = (n / sum(n))*100) %>%
+  ungroup()
+
+kable(PercentAttrition)
+
+PercentAttrition %>%
+  group_by(JobRole) %>%
+  ggplot(aes(x=JobInvolvement, y=Percent, fill = Attrition)) +
+  geom_bar(stat = "identity", alpha = 0.6) +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "bottom",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Attrition Percentage by Job Role and Job Involvement", y = "Percent") +
+  facet_grid(~JobRole)
+
+#Box Plot of Monthly Income by Job Involvement
+CaseStudy2 %>%
+  group_by(JobInvolvement) %>%
+  filter(JobRole %in% target) %>%
+  ggplot(aes(x=MonthlyIncome, y = as.factor(JobInvolvement), fill = Attrition)) + 
+  geom_boxplot(alpha = 0.6) + 
+  coord_flip() +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"),
+        rect = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
+  labs(title = "Box Plot of Monthly Income by Job Involvement", y = "Job Involvement Level") +
+  facet_grid(~JobRole)
+
+```
+
+<br>
+
+#KNN Modeling to Predict Attrition
+
+<br>
+
+```{r}
+
+####Attrition Prediction Analysis####
+
+KNNtarget <- c( "ID", "BusinessTravel", "Over18", "StandardHours", "Department", "EducationField", "Gender", "JobRole", "MaritalStatus", "OverTime")
+
+Train = CaseStudy2[, !names(CaseStudy2) %in% KNNtarget]
+Test = AttritionTest[, !names(AttritionTest) %in% KNNtarget]
+
+data.frame(Train)
+data.frame(Test)
+
+Train[sapply(Train, is.character)] <- lapply(Train[sapply(Train, is.character)], as.factor)
+
+str(Train)
+str(Test)
+
+# K = 3
+classifications = knn(Train[, names(Train) != "Attrition"], Test, Train$Attrition, prob = TRUE, k = 3)
+KNNTable = table(Test$EmployeeNumber,classifications)
+
+#Change to dataframe
+KNNTable <- as.data.frame.matrix(KNNTable) 
+
+KNNTable <- setNames(cbind(rownames(KNNTable), KNNTable, row.names = NULL), c("EmployeeNumber", "No", "Yes"))
+
+#Set up for Merge
+KNNTable <- KNNTable %>%
+              select(EmployeeNumber, Yes) %>%
+              rename(Attrition = Yes) %>%
+              mutate(Attrition = replace(Attrition, Attrition == 1, "Yes")) %>%
+              mutate(Attrition = replace(Attrition, Attrition == 0, "No"))
+
+AttritionTest <- merge(AttritionTest, KNNTable, by ="EmployeeNumber", all=TRUE)
+
+#write.csv(AttritionTest,"/Users/thud1/OneDrive/Documents/DS6306 Doing Data Science/Case Study 2//Case2PredictionsHudgins-Attrition.csv", row.names = FALSE)
+
+#Prediction Attrition Counts by Job Role
+AttritionTest %>%
+  ggplot(aes(x=Attrition, fill = Attrition)) +
+  geom_bar(alpha = 0.6) +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "bottom",
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(title = "Bar Plot of Predicted Attrition Count by Job Role", y = "Count") +
+  facet_grid(~JobRole)
+
+```
+
+<br>
+
+#Multiple Linear Regression to Predict MOnthly Income
+
+<br>
+
+```{r}
+
+#Set up model
+fit = lm(MonthlyIncome~JobLevel + TotalWorkingYears, CaseStudy2)
+summary(fit)
+
+IncomeTestlm <- IncomeTest %>%
+                select(JobLevel, TotalWorkingYears)
+
+#Get predictions
+predictions <- fit %>% 
+                predict(data.frame(IncomeTestlm))
+
+LMTable = as_tibble(predictions)
+
+LMTable <- LMTable %>%
+              rename(MonthlyIncome = value)
+
+IncomeTestFull <- merge(IncomeTest, LMTable, by = 0)
+
+IncomeTestFull <- IncomeTestFull[order(IncomeTestFull$ID),]
+
+#write.csv(IncomeTestFull,"/Users/thud1/OneDrive/Documents/DS6306 Doing Data Science/Case Study 2//Case2PredictionsHudgins-Salary.csv", row.names = FALSE)
+
+#BoxPlot of Attrition and Predicted Monthly Income
+IncomeTestFull %>%
+  ggplot(aes(x=MonthlyIncome, fill = Attrition)) + 
+  geom_boxplot(alpha = 0.6) + 
+  coord_flip() +
+  scale_fill_manual(values=c('#EBC301','#E20A17')) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"),
+        rect = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
+  labs(title = "Box Plot of Predicted Monthly Income by Job Role Attrition") +
+  facet_grid(~JobRole)
+
+```
+
+##### Conclusion
+We have determined that the leading influences on attrition are monthly income disparities, over time requirements, and job involvement.
